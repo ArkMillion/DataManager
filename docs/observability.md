@@ -36,11 +36,10 @@ Map<String, Long> snapshot = m.snapshotCounters();
 MetricsCollector.setSlowQueryThresholdMs(500);
 ```
 
-- 关系库的插入/批量插入/更新入口计时，超过阈值记录：
+- 关系库全部主要操作（insert / batchInsert / update / delete / select / selectOne /
+  count / selectPage / execute / query / queryMap）均计时，超过阈值记录**完整真实 SQL**：
   `WARN  Slow query detected (1234 ms): INSERT INTO sys_user ...`（SQL 压缩空白并截断至 120 字符）
 - 同语句累计次数保留在内存 Map，可自行导出
-
-> 查询类操作（select/query）当前不计时，避免热路径开销；如需覆盖可在业务侧用 AOP 包装。
 
 ## ConnectionMonitor
 

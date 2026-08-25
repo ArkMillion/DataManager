@@ -143,12 +143,12 @@ public final class FlywayLite implements MigrationEngine {
         Map<String, AppliedMigration> applied = new LinkedHashMap<>();
         for (Map<String, Object> row : rows) {
             String version = String.valueOf(row.get("version"));
-            Number checksum = (Number) row.getOrDefault("checksum", 0L);
+            Number checksum = (Number) row.get("checksum");
             applied.put(version, new AppliedMigration(
                     version,
                     row.get("description") == null ? "" : String.valueOf(row.get("description")),
                     row.get("script") == null ? "" : String.valueOf(row.get("script")),
-                    checksum.longValue()));
+                    checksum == null ? 0L : checksum.longValue()));
         }
         return applied;
     }

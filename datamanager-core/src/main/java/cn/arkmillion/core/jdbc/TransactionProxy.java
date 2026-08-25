@@ -30,11 +30,17 @@ public class TransactionProxy implements InvocationHandler {
         if (!targetMethod.isAnnotationPresent(Transactional.class)) {
             return invokeTarget(method, args);
         }
+        cn.arkmillion.core.annotation.Transactional tx =
+                targetMethod.getAnnotation(cn.arkmillion.core.annotation.Transactional.class);
         boolean outerTransaction = db.isInTransaction();
-        db.beginTransaction();
+        long start = System.currentTimeMillis();
+        if (!outerTransaction) {
+            db.beginTransaction();
+        }
         try {
             Object result = invokeTarget(method, args);
             if (!outerTransaction) {
+                enforceTimeout(tx, start, targetMethod.getName());
                 db.commit();
             }
             return result;
@@ -47,6 +53,20 @@ public class TransactionProxy implements InvocationHandler {
                 }
             }
             throw t;
+        }
+    }
+
+    private void enforceTimeout(cn.arkmillion.core.annotation.Transactional tx, long start, String methodName) {
+        int timeoutSeconds = tx.timeoutSeconds();
+        if (timeoutSeconds <= 0) {
+            return;
+        }
+        long elapsed = System.currentTimeMillis() - start;
+        long limit = timeoutSeconds * 1000L;
+        if (elapsed > limit) {
+            throw new DataManagerException(
+                    "Transactional method '" + methodName + "' exceeded transaction timeout: "
+                            + elapsed + " ms elapsed, limit is " + limit + " ms. Transaction rolled back.");
         }
     }
 

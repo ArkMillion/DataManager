@@ -6,25 +6,19 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 
 import javax.sql.DataSource;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 public final class ConnectionPool {
 
-    private static final Map<String, HikariDataSource> POOLS = new ConcurrentHashMap<>();
+    private static final SharedPoolRegistry REGISTRY = new SharedPoolRegistry();
 
     private ConnectionPool() {
     }
 
     public static DataSource getOrCreate(String poolName, DataSourceConfig config) {
         String key = poolKey(poolName, config);
-        HikariDataSource existing = POOLS.get(key);
-        if (existing != null && !existing.isClosed()) {
-            return existing;
-        }
-        HikariDataSource created = POOLS.computeIfAbsent(key, k -> createPool(poolName, config));
+        DataSource dataSource = REGISTRY.acquire(key, () -> createPool(poolName, config));
         ConnectionMonitor.getInstance().notifyConnected(poolName);
-        return created;
+        return dataSource;
     }
 
     private static String poolKey(String poolName, DataSourceConfig config) {
@@ -53,26 +47,14 @@ public final class ConnectionPool {
     }
 
     public static synchronized void shutdown(DataSource dataSource) {
-        if (!(dataSource instanceof HikariDataSource)) {
-            return;
-        }
-        HikariDataSource hikari = (HikariDataSource) dataSource;
-        POOLS.values().removeIf(ds -> ds == hikari);
-        if (!hikari.isClosed()) {
-            hikari.close();
-        }
+        REGISTRY.release(dataSource);
     }
 
     public static synchronized void shutdownAll() {
-        for (Map.Entry<String, HikariDataSource> e : POOLS.entrySet()) {
-            if (!e.getValue().isClosed()) {
-                e.getValue().close();
-            }
-        }
-        POOLS.clear();
+        REGISTRY.releaseAll();
     }
 
-    static int activePoolCount() {
-        return POOLS.size();
+    public static int activePoolCount() {
+        return REGISTRY.size();
     }
 }

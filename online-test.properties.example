@@ -1,0 +1,29 @@
+# Online integration test configuration.
+#
+# Recommended: start the full local test environment with Docker Compose
+# (repo root, uses non-sensitive local-only credentials):
+#
+#     docker compose up -d
+#     # wait until `docker compose ps` shows all services healthy
+#
+# Then copy this file to `online-test.properties` (already git-ignored).
+#
+# Without that file, all online tests skip automatically.
+# Run them explicitly with:
+#
+#     mvn test -Ponline-tests "-Dtest=OnlineDatabaseTest" -pl datamanager-examples
+
+mysql.url=jdbc:mysql://localhost:3306/all_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8
+mysql.username=all_test
+mysql.password=all_test
+
+postgres.url=jdbc:postgresql://localhost:5432/test
+postgres.username=test
+postgres.password=dm_pg_pwd
+
+mongo.uri=mongodb://test:dm_mongo_pwd@localhost:27017/test
+
+redis.host=localhost
+redis.port=6379
+redis.password=dm_redis_pwd
+redis.database=0

@@ -27,6 +27,26 @@
             <artifactId>datamanager-migration</artifactId>
         </dependency>
         <dependency>
+            <groupId>cn.arkmillion</groupId>
+            <artifactId>datamanager-mysql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.arkmillion</groupId>
+            <artifactId>datamanager-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.arkmillion</groupId>
+            <artifactId>datamanager-mongodb</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>cn.arkmillion</groupId>
+            <artifactId>datamanager-redis</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-simple</artifactId>
             <scope>runtime</scope>
