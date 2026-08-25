@@ -71,6 +71,10 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         }
     }
 
+    public DataSource getDataSource() {
+        return dataSource;
+    }
+
     private void release(Connection conn) {
         if (txConnection.get() == null) {
             try {
@@ -120,8 +124,9 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         sb.append(')');
 
         boolean returnKeys = idColumn != null && (idColumn.isAutoIncrement() || idColumn.getGenerationType() == GenerationType.IDENTITY);
+        String sql = sb.toString();
         Connection conn = connection();
-        try (PreparedStatement ps = conn.prepareStatement(sb.toString(),
+        try (PreparedStatement ps = conn.prepareStatement(sql,
                 returnKeys ? Statement.RETURN_GENERATED_KEYS : Statement.NO_GENERATED_KEYS)) {
             bindEntityParams(ps, columns, entity);
             int affected = ps.executeUpdate();
@@ -134,7 +139,7 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
             throw new DataManagerException("Insert failed on table '" + def.getTableName() + "': " + e.getMessage(), e);
         } finally {
             release(conn);
-            recordElapsed(start);
+            recordElapsed(start, sql);
         }
     }
 
@@ -173,13 +178,14 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         sb.append(')');
 
         int total = 0;
+        String sql = sb.toString();
         boolean ownTx = !isInTransaction();
         try {
             if (ownTx) {
                 beginTransaction();
             }
             Connection txConn = txConnection.get() != null ? txConnection.get() : dataSource.getConnection();
-            try (PreparedStatement ps = txConn.prepareStatement(sb.toString())) {
+            try (PreparedStatement ps = txConn.prepareStatement(sql)) {
                 for (T entity : entities) {
                     if (generateUuids && idColumn.getValue(entity) == null) {
                         idColumn.setValue(entity, UUID.randomUUID().toString());
@@ -210,7 +216,7 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
             }
             throw new DataManagerException("Batch insert failed on table '" + def.getTableName() + "'", e);
         } finally {
-            recordElapsed(start);
+            recordElapsed(start, sql);
         }
     }
 
@@ -266,14 +272,16 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         sb.append(" WHERE ").append(dialect.quoteIdentifier(idColumn.getColumnName())).append(" = ?");
         params.add(idColumn.getValue(entity));
 
-        int affected = executeUpdateSql(sb.toString(), params);
+        String sql = sb.toString();
+        int affected = executeUpdateSql(sql, params);
         MetricsCollector.getInstance().incrementCounter("update", dialect.dialectName());
-        recordElapsed(start);
+        recordElapsed(start, sql);
         return affected;
     }
 
     @Override
     public <T> int update(Class<T> clazz, Condition condition, Map<String, Object> updates) {
+        long start = System.currentTimeMillis();
         if (condition == null || condition.isEmpty()) {
             throw new DataManagerException("Refusing UPDATE without a condition");
         }
@@ -295,11 +303,13 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         appendWhere(def, sb, condition, params);
         int affected = executeUpdateSql(sb.toString(), params);
         MetricsCollector.getInstance().incrementCounter("update", dialect.dialectName());
+        recordElapsed(start, sb.toString());
         return affected;
     }
 
     @Override
     public <T> int delete(Class<T> clazz, Condition condition) {
+        long start = System.currentTimeMillis();
         if (condition == null || condition.isEmpty()) {
             throw new DataManagerException("Refusing DELETE without a condition");
         }
@@ -309,11 +319,13 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         appendWhere(def, sb, condition, params);
         int affected = executeUpdateSql(sb.toString(), params);
         MetricsCollector.getInstance().incrementCounter("delete", dialect.dialectName());
+        recordElapsed(start, sb.toString());
         return affected;
     }
 
     @Override
     public <T> int deleteById(Class<T> clazz, Object id) {
+        long start = System.currentTimeMillis();
         SchemaDefinition def = definition(clazz);
         ColumnMetadata idColumn = def.getIdColumn();
         if (idColumn == null) {
@@ -321,7 +333,10 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         }
         String sql = "DELETE FROM " + dialect.quoteIdentifier(def.getTableName())
                 + " WHERE " + dialect.quoteIdentifier(idColumn.getColumnName()) + " = ?";
-        return executeUpdateSql(sql, singletonList(id));
+        int affected = executeUpdateSql(sql, singletonList(id));
+        MetricsCollector.getInstance().incrementCounter("delete", dialect.dialectName());
+        recordElapsed(start, sql);
+        return affected;
     }
 
     @Override
@@ -331,16 +346,18 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         List<Object> params = new ArrayList<>();
         String sql = buildSelect(def, condition, params, -1, -1);
         List<T> result = queryInternal(sql, clazz, params.toArray());
-        recordElapsed(start);
+        recordElapsed(start, sql);
         return result;
     }
 
     @Override
     public <T> T selectOne(Class<T> clazz, Condition condition) {
+        long start = System.currentTimeMillis();
         SchemaDefinition def = definition(clazz);
         List<Object> params = new ArrayList<>();
         String sql = buildSelect(def, condition, params, 1, 0);
         List<T> rows = queryInternal(sql, clazz, params.toArray());
+        recordElapsed(start, sql);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
@@ -357,12 +374,14 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
 
     @Override
     public <T> long count(Class<T> clazz, Condition condition) {
+        long start = System.currentTimeMillis();
         SchemaDefinition def = definition(clazz);
         StringBuilder sb = new StringBuilder("SELECT COUNT(*) FROM ").append(dialect.quoteIdentifier(def.getTableName()));
         List<Object> params = new ArrayList<>();
         appendWhere(def, sb, condition == null ? Condition.empty() : condition, params);
+        String sql = sb.toString();
         Connection conn = connection();
-        try (PreparedStatement ps = conn.prepareStatement(sb.toString())) {
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
             bindParams(ps, params);
             try (ResultSet rs = ps.executeQuery()) {
                 rs.next();
@@ -372,11 +391,13 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
             throw new DataManagerException("Count failed on table '" + def.getTableName() + "'", e);
         } finally {
             release(conn);
+            recordElapsed(start, sql);
         }
     }
 
     @Override
     public <T> PageResult<T> selectPage(Class<T> clazz, Condition condition, PageParam page) {
+        long start = System.currentTimeMillis();
         SchemaDefinition def = definition(clazz);
         long total = count(clazz, condition);
         if (total == 0) {
@@ -385,21 +406,30 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         List<Object> params = new ArrayList<>();
         String sql = buildSelect(def, condition, params, page.getPageSize(), page.getOffset());
         List<T> records = queryInternal(sql, clazz, params.toArray());
+        recordElapsed(start, sql);
         return PageResult.of(records, total, page);
     }
 
     @Override
     public int execute(String sql, Object... params) {
-        return executeUpdateSql(sql, toList(params));
+        long start = System.currentTimeMillis();
+        int affected = executeUpdateSql(sql, toList(params));
+        MetricsCollector.getInstance().incrementCounter("execute", dialect.dialectName());
+        recordElapsed(start, sql);
+        return affected;
     }
 
     @Override
     public <T> List<T> query(String sql, Class<T> clazz, Object... params) {
-        return queryInternal(sql, clazz, params);
+        long start = System.currentTimeMillis();
+        List<T> result = queryInternal(sql, clazz, params);
+        recordElapsed(start, sql);
+        return result;
     }
 
     @Override
     public List<Map<String, Object>> queryMap(String sql, Object... params) {
+        long start = System.currentTimeMillis();
         Connection conn = connection();
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             bindParams(ps, toList(params));
@@ -420,6 +450,7 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
             throw new DataManagerException("queryMap failed: " + e.getMessage(), e);
         } finally {
             release(conn);
+            recordElapsed(start, sql);
         }
     }
 
@@ -766,10 +797,10 @@ public abstract class AbstractJdbcRelationalDB implements RelationalDB {
         return list;
     }
 
-    private void recordElapsed(long start) {
+    private void recordElapsed(long start, String sql) {
         long elapsed = System.currentTimeMillis() - start;
         if (elapsed > MetricsCollector.getSlowQueryThresholdMs()) {
-            MetricsCollector.getInstance().recordSlowQuery("<jdbc operation>", elapsed);
+            MetricsCollector.getInstance().recordSlowQuery(sql, elapsed);
         }
     }
 }

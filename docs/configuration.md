@@ -40,6 +40,8 @@ DataManagerConfig config = DataManagerConfig.builder()
 | `ssl(boolean)` | false | URL 追加 useSSL=true |
 
 底层连接池键 = `mysql|url|username`：多个实例指向同一端点时自动共享同一个池。
+共享池采用**引用计数**释放语义——任一实例 `close()` 只减计数，最后一个持有者关闭时才物理关闭连接池，
+因此多实例互不干扰。
 
 ## PostgreSQL（`.postgres(url, user, password)`）
 
