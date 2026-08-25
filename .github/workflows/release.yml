@@ -33,7 +33,11 @@ jobs:
       - name: Resolve version
         id: version
         run: |
-          VERSION=$(mvn -B -ntp org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate -Dexpression=project.version -DforceStdout | tail -n 1)
+          VERSION=$(mvn -B -q org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate -Dexpression=project.version -DforceStdout)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "Failed to resolve valid project version, got: '$VERSION'"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Project version: $VERSION"
 
