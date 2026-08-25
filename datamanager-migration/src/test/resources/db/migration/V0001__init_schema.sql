@@ -1,0 +1,4 @@
+CREATE TABLE IF NOT EXISTS migration_item (
+  id INTEGER PRIMARY KEY,
+  name TEXT
+);
