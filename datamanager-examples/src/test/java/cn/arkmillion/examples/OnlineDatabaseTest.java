@@ -385,7 +385,7 @@ class OnlineDatabaseTest {
 
             long modified = mongo.update(ItLog.class,
                     Filter.where("level").eq("INFO"),
-                    Update.builder().set("payload.status", "done").inc("retry", 1).build());
+                    Update.builder().set("payload.status", "done").inc("payload.retry", 1).build());
             assertEquals(2L, modified);
 
             ItLog back = mongo.findOne(ItLog.class, Filter.where("level").eq("INFO"));
