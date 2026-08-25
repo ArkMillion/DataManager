@@ -7,6 +7,8 @@
 [![Java](https://img.shields.io/badge/JDK-8%2B-blue)](https://github.com/ArkMillion/DataManager)
 [![Build](https://img.shields.io/badge/Maven-BUILD%20SUCCESS-brightgreen)](https://github.com/ArkMillion/DataManager/actions)
 [![Tests](https://img.shields.io/badge/tests-66%20passing-success)](https://github.com/ArkMillion/DataManager)
+[![Release](https://img.shields.io/github/v/release/ArkMillion/DataManager)](https://github.com/ArkMillion/DataManager/releases)
+[![JitPack](https://jitpack.io/v/ArkMillion/DataManager.svg)](https://jitpack.io/#ArkMillion/DataManager)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
 一套面向纯 Java 环境（桌面应用、CLI 工具、嵌入式系统）的企业级数据持久层框架。
@@ -81,19 +83,82 @@ datamanager-parent/
 
 ### 1. 引入依赖
 
+本项目通过 [JitPack](https://jitpack.io/#ArkMillion/DataManager) 发布：每次合并到 `master` 会自动构建并发布 GitHub Release，JitPack 按 Tag 提供依赖，无需手动上传仓库。
+
+#### Step 1：添加 JitPack 仓库
+
+**Maven**（`pom.xml`）：
+
+```xml
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+```
+
+**Gradle**（`settings.gradle`）：
+
+```groovy
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+        maven { url 'https://jitpack.io' }
+    }
+}
+```
+
+**Kotlin DSL**（`settings.gradle.kts`）：
+
+```kotlin
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        mavenCentral()
+        maven("https://jitpack.io")
+    }
+}
+```
+
+#### Step 2：添加依赖
+
+> 多模块项目经 JitPack 构建后，groupId 为 `com.github.ArkMillion.DataManager`，artifactId 对应各模块名；版本号使用 [Release Tag](https://github.com/ArkMillion/DataManager/releases)（如 `v1.0.0`）。
+
+**Maven**：
+
 ```xml
 <dependency>
-    <groupId>cn.arkmillion</groupId>
+    <groupId>com.github.ArkMillion.DataManager</groupId>
     <artifactId>datamanager-core</artifactId>
-    <version>1.0.0</version>
+    <version>v1.0.0</version>
 </dependency>
 <!-- 按需引入适配器 -->
 <dependency>
-    <groupId>cn.arkmillion</groupId>
+    <groupId>com.github.ArkMillion.DataManager</groupId>
     <artifactId>datamanager-sqlite</artifactId>
-    <version>1.0.0</version>
+    <version>v1.0.0</version>
 </dependency>
 ```
+
+**Gradle**：
+
+```groovy
+implementation 'com.github.ArkMillion.DataManager:datamanager-core:v1.0.0'
+// 按需引入适配器
+implementation 'com.github.ArkMillion.DataManager:datamanager-sqlite:v1.0.0'
+```
+
+**Kotlin DSL**：
+
+```kotlin
+implementation("com.github.ArkMillion.DataManager:datamanager-core:v1.0.0")
+// 按需引入适配器
+implementation("com.github.ArkMillion.DataManager:datamanager-sqlite:v1.0.0")
+```
+
+可用模块与 artifactId 对应关系见[模块结构](#模块结构)。
 
 ### 2. 定义实体
 
@@ -390,9 +455,9 @@ mvn exec:java -pl datamanager-examples \
 
 ```xml
 <dependency>
-    <groupId>cn.arkmillion</groupId>
+    <groupId>com.github.ArkMillion.DataManager</groupId>
     <artifactId>datamanager-bytebuddy</artifactId>
-    <version>1.0.0</version>
+    <version>v1.0.0</version>
 </dependency>
 ```
 
