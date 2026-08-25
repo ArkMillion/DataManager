@@ -9,3 +9,5 @@ target/
 *.db
 *.db-journal
 .DS_Store
+
+online-test.properties

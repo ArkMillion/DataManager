@@ -1,0 +1,18 @@
+# Copy this file to `online-test.properties` (git-ignored) and fill in real values
+# to enable the online integration tests (OnlineDatabaseTest).
+# Without that file, all online tests skip automatically.
+
+mysql.url=jdbc:mysql://localhost:3306/all_test?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8
+mysql.username=all_test
+mysql.password=change-me
+
+postgres.url=jdbc:postgresql://127.0.0.1:5432/test
+postgres.username=test
+postgres.password=change-me
+
+mongo.uri=mongodb://user:password@host:27017/test
+
+redis.host=localhost
+redis.port=6379
+redis.password=change-me
+redis.database=0

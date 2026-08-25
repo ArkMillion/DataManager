@@ -78,6 +78,10 @@ public final class Update {
         return this;
     }
 
+    public Update build() {
+        return this;
+    }
+
     public List<Entry> getEntries() {
         return entries;
     }

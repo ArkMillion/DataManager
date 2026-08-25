@@ -128,6 +128,16 @@
             </dependency>
             <dependency>
                 <groupId>cn.arkmillion</groupId>
+                <artifactId>datamanager-postgresql</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.arkmillion</groupId>
+                <artifactId>datamanager-bytebuddy</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.arkmillion</groupId>
                 <artifactId>datamanager-sqlite</artifactId>
                 <version>${project.version}</version>
             </dependency>
@@ -161,8 +171,28 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <version>3.2.5</version>
+                    <configuration>
+                        <excludedGroups>online</excludedGroups>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>
     </build>
+
+    <profiles>
+        <profile>
+            <id>online-tests</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <configuration>
+                            <excludedGroups combine.self="override"/>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
