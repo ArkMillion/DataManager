@@ -35,10 +35,10 @@ final class ScriptLocator {
         for (String location : locations) {
             boolean classpath = location.startsWith("classpath:");
             String path = classpath ? location.substring("classpath:".length()) : location;
-            if (path.startsWith("/")) {
-                path = path.substring(1);
-            }
             if (classpath) {
+                if (path.startsWith("/")) {
+                    path = path.substring(1);
+                }
                 if (!path.endsWith("/")) {
                     path = path + "/";
                 }
