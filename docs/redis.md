@@ -130,6 +130,32 @@ if (redis.tryLock("lock:order:create", requestId, 10)) {     // 至少持锁 1 �
 
 > 这是单实例 Redis 的轻量方案，不含看门狗续期与 RedLock 共识；长事务请自行评估续期策略。
 
+## 发布/订阅（Pub/Sub）
+
+`publish` 返回接收到消息的订阅者数量；`subscribe` / `pSubscribe` 在后台守护线程独占连接监听，返回 `Subscription` 句柄用于退订：
+
+```java
+// 精确频道
+Subscription sub = redis.subscribe("order:created", (channel, message) -> {
+    System.out.println(channel + " -> " + message);
+});
+
+// 模式订阅（glob 风格）
+Subscription all = redis.pSubscribe("order:*", (channel, message) -> { /* ... */ });
+
+long receivers = redis.publish("order:created", "{\"id\":42}");   // ≥1 才有人收到
+redis.publishObject("order:created", order);                      // 自动 JSON 序列化
+
+sub.unsubscribe();          // 幂等；close() 等价
+```
+
+行为说明：
+
+- 订阅连接为**池外专用连接**（订阅模式下 Redis 协议独占 socket），socket 超时设为无限，空闲不会断开；
+- 监听回调抛出的异常会被捕获记录，**不会**中断订阅；
+- `DataManager.close()` 会统一退订并关闭所有订阅连接；
+- Redis Pub/Sub 为即发即弃，不持久化、无消费确认——离线消息与重试请改用 Stream/List 方案。
+
 ## 键空间管理
 
 ```java

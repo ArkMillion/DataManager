@@ -22,7 +22,7 @@ DataManager 是一套面向纯 Java 环境（桌面应用、CLI 工具、嵌入�
 | [多数据库与无缝切换](multi-database.md) | 同类型多实例、按代号取用、跨库切换边界说明 |
 | [迁移引擎 FlywayLite](migration.md) | 版本化脚本、历史表、校验和、占位符 |
 | [MongoDB 指南](mongodb.md) | 实体映射、Filter/Update DSL、聚合管道、索引管理 |
-| [Redis 缓存模块](redis.md) | 键值/Hash/List/Set/ZSet、对象序列化、分布式锁、多实例 |
+| [Redis 缓存模块](redis.md) | 键值/Hash/List/Set/ZSet、对象序列化、分布式锁、Pub/Sub、多实例 |
 | [ByteBuddy 性能增强](bytebuddy-accessors.md) | 字节码访问器原理、启用方式、回退策略 |
 | [可观测性](observability.md) | 慢查询日志、操作计数器、连接池状态监听 |
 | [安全特性](security.md) | SQL 注入防护、敏感信息保护、危险操作管控 |

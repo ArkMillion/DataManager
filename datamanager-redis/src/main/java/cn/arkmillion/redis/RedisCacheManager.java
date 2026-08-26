@@ -3,6 +3,8 @@ package cn.arkmillion.redis;
 import cn.arkmillion.core.config.PlaceholderResolver;
 import cn.arkmillion.core.config.RedisConfig;
 import cn.arkmillion.core.db.CacheManager;
+import cn.arkmillion.core.db.MessageListener;
+import cn.arkmillion.core.db.Subscription;
 import cn.arkmillion.core.exception.DataManagerException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -10,9 +12,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.DefaultJedisClientConfig;
+import redis.clients.jedis.HostAndPort;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
+import redis.clients.jedis.JedisPubSub;
 import redis.clients.jedis.params.SetParams;
 
 import java.time.Duration;
@@ -24,6 +29,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RedisCacheManager implements CacheManager {
 
@@ -33,8 +40,11 @@ public class RedisCacheManager implements CacheManager {
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
     private final RedisConfig config;
+    private final String uri;
+    private final String resolvedPassword;
     private final JedisPool pool;
     private final ObjectMapper mapper;
+    private final List<RedisSubscriptionImpl> subscriptions = new CopyOnWriteArrayList<>();
 
     public RedisCacheManager(RedisConfig config) {
         this.config = config;
@@ -42,13 +52,15 @@ public class RedisCacheManager implements CacheManager {
         if (password != null && !password.isEmpty()) {
             password = PlaceholderResolver.resolve(password);
         }
+        this.resolvedPassword = password;
         JedisPoolConfig poolConfig = new JedisPoolConfig();
         poolConfig.setMaxTotal(config.getMaxTotal());
         poolConfig.setMaxIdle(config.getMaxIdle());
         poolConfig.setMinIdle(config.getMinIdle());
         poolConfig.setTestWhileIdle(true);
 
-        this.pool = new JedisPool(poolConfig, buildUri(config, password));
+        this.uri = buildUri(config, password);
+        this.pool = new JedisPool(poolConfig, this.uri);
         this.mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -342,7 +354,159 @@ public class RedisCacheManager implements CacheManager {
     }
 
     @Override
+    public long publish(String channel, String message) {
+        if (channel == null || channel.isEmpty()) {
+            throw new DataManagerException("channel must not be empty");
+        }
+        Long receivers = execute(j -> j.publish(channel, message));
+        return receivers == null ? 0L : receivers;
+    }
+
+    @Override
+    public <T> long publishObject(String channel, T obj) {
+        return publish(channel, serialize(obj));
+    }
+
+    @Override
+    public Subscription subscribe(String channel, MessageListener listener) {
+        return startSubscription(channel, false, listener);
+    }
+
+    @Override
+    public Subscription pSubscribe(String pattern, MessageListener listener) {
+        return startSubscription(pattern, true, listener);
+    }
+
+    private Subscription startSubscription(String channelOrPattern, boolean patternMode, MessageListener listener) {
+        if (channelOrPattern == null || channelOrPattern.isEmpty() || listener == null) {
+            throw new DataManagerException("channel/pattern and listener are required");
+        }
+        Jedis connection = createSubscriberConnection();
+        try {
+            JedisPubSub handler = new JedisPubSub() {
+                @Override
+                public void onMessage(String channel, String message) {
+                    dispatch(listener, channel, message);
+                }
+
+                @Override
+                public void onPMessage(String pattern, String channel, String message) {
+                    dispatch(listener, channel, message);
+                }
+            };
+            RedisSubscriptionImpl sub =
+                    new RedisSubscriptionImpl(connection, handler, channelOrPattern, patternMode);
+            subscriptions.add(sub);
+            return sub;
+        } catch (RuntimeException e) {
+            connection.close();
+            throw e;
+        }
+    }
+
+    private static void dispatch(MessageListener listener, String channel, String message) {
+        try {
+            listener.onMessage(channel, message);
+        } catch (Exception e) {
+            LOG.error("Redis pub/sub listener failed for message on channel '{}'", channel, e);
+        }
+    }
+
+    private Jedis createSubscriberConnection() {
+        HostAndPort address = new HostAndPort(
+                PlaceholderResolver.resolve(config.getHost()), config.getPort());
+        DefaultJedisClientConfig clientConfig = DefaultJedisClientConfig.builder()
+                .connectionTimeoutMillis(config.getTimeoutMs())
+                .socketTimeoutMillis(0)
+                .password(resolvedPassword == null || resolvedPassword.isEmpty() ? null : resolvedPassword)
+                .database(config.getDatabase())
+                .ssl(config.isSsl())
+                .build();
+        return new Jedis(address, clientConfig);
+    }
+
+    private final class RedisSubscriptionImpl implements Subscription {
+
+        private final Jedis connection;
+        private final JedisPubSub handler;
+        private final String channelOrPattern;
+        private final boolean patternMode;
+        private final AtomicBoolean closed = new AtomicBoolean(false);
+
+        private RedisSubscriptionImpl(Jedis connection, JedisPubSub handler,
+                                      String channelOrPattern, boolean patternMode) {
+            this.connection = connection;
+            this.handler = handler;
+            this.channelOrPattern = channelOrPattern;
+            this.patternMode = patternMode;
+            Thread worker = new Thread(this::runLoop,
+                    "datamanager-redis-pubsub-" + channelOrPattern);
+            worker.setDaemon(true);
+            worker.start();
+        }
+
+        private void runLoop() {
+            try {
+                if (patternMode) {
+                    connection.psubscribe(handler, channelOrPattern);
+                } else {
+                    connection.subscribe(handler, channelOrPattern);
+                }
+            } catch (Exception e) {
+                if (!closed.get()) {
+                    LOG.warn("Redis subscription to '{}' ended unexpectedly: {}",
+                            channelOrPattern, e.getMessage());
+                }
+            } finally {
+                releaseConnection();
+            }
+        }
+
+        @Override
+        public boolean isSubscribed() {
+            return !closed.get() && handler.isSubscribed();
+        }
+
+        @Override
+        public void unsubscribe() {
+            if (!closed.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                if (handler.isSubscribed()) {
+                    handler.unsubscribe();
+                    handler.punsubscribe();
+                }
+            } catch (Exception e) {
+                LOG.debug("Ignored error while unsubscribing '{}': {}", channelOrPattern, e.getMessage());
+            }
+            releaseConnection();
+            subscriptions.remove(this);
+        }
+
+        private void releaseConnection() {
+            try {
+                connection.close();
+            } catch (Exception e) {
+                LOG.debug("Ignored error while closing pub/sub connection", e);
+            }
+        }
+
+        @Override
+        public void close() {
+            unsubscribe();
+        }
+    }
+
+    @Override
     public void close() {
+        for (RedisSubscriptionImpl sub : subscriptions) {
+            try {
+                sub.unsubscribe();
+            } catch (Exception e) {
+                LOG.debug("Ignored error while closing subscription '{}'", sub.channelOrPattern, e);
+            }
+        }
         pool.close();
     }
 

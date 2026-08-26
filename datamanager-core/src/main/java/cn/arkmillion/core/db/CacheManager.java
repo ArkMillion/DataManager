@@ -89,6 +89,22 @@ public interface CacheManager extends AutoCloseable {
 
     void flushAll();
 
+    default long publish(String channel, String message) {
+        throw new UnsupportedOperationException("publish is not supported by this CacheManager");
+    }
+
+    default <T> long publishObject(String channel, T obj) {
+        throw new UnsupportedOperationException("publish is not supported by this CacheManager");
+    }
+
+    default Subscription subscribe(String channel, MessageListener listener) {
+        throw new UnsupportedOperationException("subscribe is not supported by this CacheManager");
+    }
+
+    default Subscription pSubscribe(String pattern, MessageListener listener) {
+        throw new UnsupportedOperationException("pSubscribe is not supported by this CacheManager");
+    }
+
     @Override
     void close();
 }

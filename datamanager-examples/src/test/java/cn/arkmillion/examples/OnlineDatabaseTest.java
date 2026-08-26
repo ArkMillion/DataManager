@@ -13,6 +13,7 @@ import cn.arkmillion.core.db.CacheManager;
 import cn.arkmillion.core.db.DataManager;
 import cn.arkmillion.core.db.DocumentDB;
 import cn.arkmillion.core.db.RelationalDB;
+import cn.arkmillion.core.db.Subscription;
 import cn.arkmillion.core.enums.GenerationType;
 import cn.arkmillion.core.enums.IndexType;
 import cn.arkmillion.core.enums.SyncMode;
@@ -40,6 +41,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static cn.arkmillion.core.condition.Condition.where;
@@ -502,6 +505,79 @@ class OnlineDatabaseTest {
                     redis.del(mine.toArray(new String[0]));
                 }
             }
+        }
+    }
+
+    @Test
+    void redisOnlinePubSub() throws Exception {
+        assumeConfigured("redis.host", "redis.port");
+        DataManagerConfig config = DataManagerConfig.builder()
+                .redis(require("redis.host"), Integer.parseInt(require("redis.port")))
+                .alias("it-redis-pubsub")
+                .database(PROPS.containsKey("redis.database") ? Integer.parseInt(require("redis.database")) : 0)
+                .password(PROPS.getProperty("redis.password") == null ? null : require("redis.password"))
+                .timeout(4000)
+                .build()
+                .build();
+
+        try (DataManager dm = DataManagerFactory.create(config)) {
+            CacheManager redis = dm.getCacheManager("it-redis-pubsub");
+            String suffix = UUID.randomUUID().toString().substring(0, 8);
+            String channel = "dm-it:chan:" + suffix;
+            String patChannel = "dm-it:pat:" + suffix + ":evt";
+
+            java.util.concurrent.BlockingQueue<String> plainMessages =
+                    new java.util.concurrent.LinkedBlockingQueue<>();
+            java.util.concurrent.BlockingQueue<String> patternMessages =
+                    new java.util.concurrent.LinkedBlockingQueue<>();
+
+            Subscription s1 = null;
+            Subscription s2 = null;
+            try {
+                s1 = redis.subscribe(channel, (c, m) -> plainMessages.offer(m));
+                waitForSubscriber(redis, channel);
+                assertEquals("probe", plainMessages.poll(5, TimeUnit.SECONDS));
+
+                assertEquals(1L, redis.publish(channel, "hello"));
+                assertEquals("hello", plainMessages.poll(5, TimeUnit.SECONDS));
+
+                SessionUser payload = new SessionUser("bob", 7);
+                assertEquals(1L, redis.publishObject(channel, payload));
+                String jsonMessage = plainMessages.poll(5, TimeUnit.SECONDS);
+                assertNotNull(jsonMessage);
+                assertTrue(jsonMessage.startsWith("{"));
+                assertTrue(jsonMessage.contains("\"name\":\"bob\""));
+
+                s2 = redis.pSubscribe("dm-it:pat:" + suffix + ":*", (c, m) -> patternMessages.offer(m));
+                waitForSubscriber(redis, patChannel);
+                assertEquals("probe", patternMessages.poll(5, TimeUnit.SECONDS));
+
+                assertEquals(1L, redis.publish(patChannel, "e1"));
+                assertEquals("e1", patternMessages.poll(5, TimeUnit.SECONDS));
+                assertEquals(1L, redis.publish(patChannel, "e2"));
+                assertEquals("e2", patternMessages.poll(5, TimeUnit.SECONDS));
+
+                assertTrue(s1.isSubscribed());
+                assertTrue(s2.isSubscribed());
+                s1.unsubscribe();
+                assertEquals(false, s1.isSubscribed());
+                assertEquals(0L, redis.publish(channel, "after-unsub"));
+            } finally {
+                if (s1 != null) {
+                    s1.close();
+                }
+                if (s2 != null) {
+                    s2.close();
+                }
+            }
+        }
+    }
+
+    private static void waitForSubscriber(CacheManager redis, String probeChannel) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (redis.publish(probeChannel, "probe") == 0) {
+            assertTrue(System.currentTimeMillis() < deadline, "subscriber did not register in time");
+            Thread.sleep(50);
         }
     }
 }
