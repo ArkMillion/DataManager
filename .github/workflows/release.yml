@@ -46,13 +46,19 @@ jobs:
         run: |
           if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag v${{ steps.version.outputs.version }} already exists, skipping release."
+            echo "Tag v${{ steps.version.outputs.version }} already exists, will replace release."
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Delete existing release & tag
+        if: steps.check.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "v${{ steps.version.outputs.version }}" --yes --cleanup-tag
+
       - name: Collect artifacts
-        if: steps.check.outputs.exists == 'false'
         run: |
           mkdir staging
           for jar in */target/*.jar; do
@@ -64,11 +70,11 @@ jobs:
           ls -l staging/
 
       - name: Create GitHub Release
-        if: steps.check.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "v${{ steps.version.outputs.version }}" \
+            --target "$GITHUB_SHA" \
             --title "v${{ steps.version.outputs.version }}" \
             --generate-notes \
             staging/*.jar
