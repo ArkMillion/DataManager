@@ -60,6 +60,20 @@ public final class DataManagerFactory {
                     throw e;
                 }
             }
+            boolean firstMessaging = true;
+            for (MessagingProvider provider : ServiceLoader.load(MessagingProvider.class, classLoader)) {
+                List<InstanceBinding<cn.arkmillion.core.mq.MessagingManager>> bindings = new java.util.ArrayList<>();
+                try {
+                    bindings = provider.createInstances(config);
+                    for (InstanceBinding<cn.arkmillion.core.mq.MessagingManager> binding : bindings) {
+                        manager.registerMessaging(binding.getName(), binding.getInstance(), firstMessaging);
+                        firstMessaging = false;
+                    }
+                } catch (RuntimeException e) {
+                    closeBindings(bindings, e);
+                    throw e;
+                }
+            }
             return manager;
         } catch (RuntimeException failure) {
             try {

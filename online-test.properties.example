@@ -27,3 +27,10 @@ redis.host=localhost
 redis.port=6379
 redis.password=dm_redis_pwd
 redis.database=0
+
+kafka.servers=localhost:9092
+
+rabbit.host=localhost
+rabbit.port=5672
+rabbit.username=dm_rabbit
+rabbit.password=dm_rabbit_pwd

@@ -5,6 +5,7 @@ import cn.arkmillion.core.db.DataManager;
 import cn.arkmillion.core.db.DocumentDB;
 import cn.arkmillion.core.db.RelationalDB;
 import cn.arkmillion.core.exception.DataManagerException;
+import cn.arkmillion.core.mq.MessagingManager;
 
 import java.util.Collections;
 import java.util.Map;
@@ -16,7 +17,9 @@ public class DataManagerImpl implements DataManager {
     private final Map<String, RelationalDB> relationalDBs = new ConcurrentHashMap<>();
     private final Map<String, DocumentDB> documentDBs = new ConcurrentHashMap<>();
     private final Map<String, CacheManager> cacheManagers = new ConcurrentHashMap<>();
+    private final Map<String, MessagingManager> messagingManagers = new ConcurrentHashMap<>();
     private volatile String defaultCacheName;
+    private volatile String defaultMessagingName;
 
     void register(String name, RelationalDB db) {
         requireName(name);
@@ -42,6 +45,17 @@ public class DataManagerImpl implements DataManager {
         }
         if (makeDefault || defaultCacheName == null) {
             defaultCacheName = name;
+        }
+    }
+
+    void registerMessaging(String name, MessagingManager messaging, boolean makeDefault) {
+        requireName(name);
+        MessagingManager existing = messagingManagers.putIfAbsent(name, messaging);
+        if (existing != null) {
+            throw new DataManagerException("MessagingManager '" + name + "' already registered");
+        }
+        if (makeDefault || defaultMessagingName == null) {
+            defaultMessagingName = name;
         }
     }
 
@@ -99,6 +113,26 @@ public class DataManagerImpl implements DataManager {
     }
 
     @Override
+    public MessagingManager getMessaging() {
+        return getMessaging(defaultMessagingName);
+    }
+
+    @Override
+    public MessagingManager getMessaging(String name) {
+        MessagingManager messaging = name == null ? null : messagingManagers.get(name);
+        if (messaging == null) {
+            throw new DataManagerException("MessagingManager '" + name + "' not found. Registered: "
+                    + messagingManagers.keySet());
+        }
+        return messaging;
+    }
+
+    @Override
+    public Set<String> getMessagingNames() {
+        return Collections.unmodifiableSet(messagingManagers.keySet());
+    }
+
+    @Override
     public void close() {
         RuntimeException first = null;
         for (RelationalDB db : relationalDBs.values()) {
@@ -122,6 +156,15 @@ public class DataManagerImpl implements DataManager {
         for (CacheManager cache : cacheManagers.values()) {
             try {
                 cache.close();
+            } catch (RuntimeException e) {
+                if (first == null) {
+                    first = e;
+                }
+            }
+        }
+        for (MessagingManager messaging : messagingManagers.values()) {
+            try {
+                messaging.close();
             } catch (RuntimeException e) {
                 if (first == null) {
                     first = e;

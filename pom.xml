@@ -35,6 +35,8 @@
         <module>datamanager-sqlite</module>
         <module>datamanager-mongodb</module>
         <module>datamanager-redis</module>
+        <module>datamanager-kafka</module>
+        <module>datamanager-rabbitmq</module>
         <module>datamanager-migration</module>
         <module>datamanager-examples</module>
     </modules>
@@ -53,6 +55,8 @@
         <mongo.version>4.11.1</mongo.version>
         <jedis.version>4.4.6</jedis.version>
         <bytebuddy.version>1.14.18</bytebuddy.version>
+        <kafka.version>3.7.1</kafka.version>
+        <amqp.version>5.21.0</amqp.version>
     </properties>
 
     <dependencyManagement>
@@ -112,6 +116,16 @@
                 <version>${jedis.version}</version>
             </dependency>
             <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>${amqp.version}</version>
+            </dependency>
+            <dependency>
                 <groupId>net.bytebuddy</groupId>
                 <artifactId>byte-buddy</artifactId>
                 <version>${bytebuddy.version}</version>
@@ -149,6 +163,16 @@
             <dependency>
                 <groupId>cn.arkmillion</groupId>
                 <artifactId>datamanager-redis</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.arkmillion</groupId>
+                <artifactId>datamanager-kafka</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cn.arkmillion</groupId>
+                <artifactId>datamanager-rabbitmq</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

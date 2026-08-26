@@ -49,6 +49,7 @@ GitHub：**<https://github.com/ArkMillion/DataManager>**
 - **注解驱动自动建表** —— `@Table` / `@Column` 声明实体，框架自动生成 DDL、索引并支持增量补列
 - **SQL 版本化迁移** —— 内置 FlywayLite 引擎：按版本顺序执行、历史留痕、占位符替换、checksum 防篡改
 - **Redis 独立缓存模块** —— 与持久化完全解耦的 `CacheManager`，含对象序列化与轻量分布式锁
+- **消息队列扩展** —— Kafka / RabbitMQ 统一 `MessagingManager`：发送、订阅、退订一套 API
 - **企业级稳定性** —— HikariCP 连接池、ThreadLocal 事务、SLF4J 日志、慢查询监控、连接状态观察者
 
 ## 模块结构
@@ -62,6 +63,8 @@ datamanager-parent/
 ├── datamanager-sqlite/         # SQLite 适配器
 ├── datamanager-mongodb/        # MongoDB 文档适配器
 ├── datamanager-redis/          # Redis 独立缓存模块（Jedis）
+├── datamanager-kafka/          # Kafka 消息队列扩展（kafka-clients）
+├── datamanager-rabbitmq/       # RabbitMQ 消息队列扩展（amqp-client）
 ├── datamanager-migration/      # SQL 文件版本化迁移引擎（FlywayLite）
 └── datamanager-examples/       # 可运行示例
 ```
@@ -78,6 +81,8 @@ datamanager-parent/
 | SQLite | 3.8+ |
 | MongoDB | 4.0+ |
 | Redis | 5.0+ |
+| Kafka | 2.x+（可选，仅消息队列扩展） |
+| RabbitMQ | 3.8+（可选，仅消息队列扩展） |
 
 ## 快速开始
 

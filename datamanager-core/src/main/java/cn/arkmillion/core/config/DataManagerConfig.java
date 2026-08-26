@@ -11,6 +11,8 @@ public final class DataManagerConfig {
     private final List<SQLiteConfig> sqliteConfigs;
     private final List<MongoConfig> mongoConfigs;
     private final List<RedisConfig> redisConfigs;
+    private final List<KafkaConfig> kafkaConfigs;
+    private final List<RabbitConfig> rabbitConfigs;
 
     private DataManagerConfig(Builder builder) {
         this.mysqlConfigs = Collections.unmodifiableList(new ArrayList<>(builder.mysqlConfigs));
@@ -18,6 +20,8 @@ public final class DataManagerConfig {
         this.sqliteConfigs = Collections.unmodifiableList(new ArrayList<>(builder.sqliteConfigs));
         this.mongoConfigs = Collections.unmodifiableList(new ArrayList<>(builder.mongoConfigs));
         this.redisConfigs = Collections.unmodifiableList(new ArrayList<>(builder.redisConfigs));
+        this.kafkaConfigs = Collections.unmodifiableList(new ArrayList<>(builder.kafkaConfigs));
+        this.rabbitConfigs = Collections.unmodifiableList(new ArrayList<>(builder.rabbitConfigs));
     }
 
     public static Builder builder() {
@@ -64,6 +68,14 @@ public final class DataManagerConfig {
         return redisConfigs;
     }
 
+    public List<KafkaConfig> getKafkaConfigs() {
+        return kafkaConfigs;
+    }
+
+    public List<RabbitConfig> getRabbitConfigs() {
+        return rabbitConfigs;
+    }
+
     public static final class Builder {
 
         private final List<MySQLConfig> mysqlConfigs = new ArrayList<>();
@@ -71,6 +83,8 @@ public final class DataManagerConfig {
         private final List<SQLiteConfig> sqliteConfigs = new ArrayList<>();
         private final List<MongoConfig> mongoConfigs = new ArrayList<>();
         private final List<RedisConfig> redisConfigs = new ArrayList<>();
+        private final List<KafkaConfig> kafkaConfigs = new ArrayList<>();
+        private final List<RabbitConfig> rabbitConfigs = new ArrayList<>();
 
         public MySQLBuilder mysql(String url, String user, String password) {
             MySQLConfig config = new MySQLConfig(url, user, password);
@@ -100,6 +114,18 @@ public final class DataManagerConfig {
             RedisConfig config = new RedisConfig(host, port);
             redisConfigs.add(config);
             return new RedisBuilder(this, config);
+        }
+
+        public KafkaBuilder kafka(String servers) {
+            KafkaConfig config = new KafkaConfig(servers);
+            kafkaConfigs.add(config);
+            return new KafkaBuilder(this, config);
+        }
+
+        public RabbitBuilder rabbit(String host, int port) {
+            RabbitConfig config = new RabbitConfig(host, port);
+            rabbitConfigs.add(config);
+            return new RabbitBuilder(this, config);
         }
 
         public DataManagerConfig build() {
@@ -361,5 +387,102 @@ public final class DataManagerConfig {
     public interface PoolCustomizer {
 
         void customize(RedisConfig config);
+    }
+
+    public static final class KafkaBuilder {
+
+        private final Builder outer;
+        private final KafkaConfig config;
+
+        private KafkaBuilder(Builder outer, KafkaConfig config) {
+            this.outer = outer;
+            this.config = config;
+        }
+
+        public KafkaBuilder alias(String alias) {
+            config.setAlias(alias);
+            return this;
+        }
+
+        public KafkaBuilder acks(String acks) {
+            if (acks != null && !acks.isEmpty()) {
+                config.setAcks(acks);
+            }
+            return this;
+        }
+
+        public KafkaBuilder timeout(int timeoutMs) {
+            config.setTimeoutMs(timeoutMs);
+            return this;
+        }
+
+        public KafkaBuilder sendTimeout(long sendTimeoutMs) {
+            config.setSendTimeoutMs(sendTimeoutMs);
+            return this;
+        }
+
+        public KafkaBuilder autoOffsetReset(String mode) {
+            config.setAutoOffsetReset(mode);
+            return this;
+        }
+
+        public Builder end() {
+            return outer;
+        }
+
+        public Builder build() {
+            return outer;
+        }
+    }
+
+    public static final class RabbitBuilder {
+
+        private final Builder outer;
+        private final RabbitConfig config;
+
+        private RabbitBuilder(Builder outer, RabbitConfig config) {
+            this.outer = outer;
+            this.config = config;
+        }
+
+        public RabbitBuilder alias(String alias) {
+            config.setAlias(alias);
+            return this;
+        }
+
+        public RabbitBuilder credentials(String username, String password) {
+            if (username != null && !username.isEmpty()) {
+                config.setUsername(username);
+            }
+            if (password != null && !password.isEmpty()) {
+                config.setPassword(password);
+            }
+            return this;
+        }
+
+        public RabbitBuilder virtualHost(String virtualHost) {
+            if (virtualHost != null && !virtualHost.isEmpty()) {
+                config.setVirtualHost(virtualHost);
+            }
+            return this;
+        }
+
+        public RabbitBuilder timeout(int timeoutMs) {
+            config.setTimeoutMs(timeoutMs);
+            return this;
+        }
+
+        public RabbitBuilder automaticRecovery(boolean enabled) {
+            config.setAutomaticRecovery(enabled);
+            return this;
+        }
+
+        public Builder end() {
+            return outer;
+        }
+
+        public Builder build() {
+            return outer;
+        }
     }
 }
