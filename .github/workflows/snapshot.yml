@@ -1,0 +1,61 @@
+name: Snapshot
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: snapshot-master
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Build & Publish SNAPSHOT
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build & Test
+        run: mvn -B -ntp verify
+
+      - name: Resolve version
+        id: version
+        run: |
+          VERSION=$(mvn -B -q org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate -Dexpression=project.version -DforceStdout)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Project version: $VERSION"
+
+      - name: Collect artifacts
+        run: |
+          mkdir staging
+          for jar in */target/*.jar; do
+            case "$jar" in
+              datamanager-examples/*|*sources*|*javadoc*) continue ;;
+              *) cp "$jar" staging/ ;;
+            esac
+          done
+          ls -l staging/
+
+      - name: Publish rolling SNAPSHOT release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete snapshot --yes --cleanup-tag 2>/dev/null || true
+          gh release create snapshot \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "SNAPSHOT (master) — ${{ steps.version.outputs.version }}" \
+            --generate-notes \
+            staging/*.jar

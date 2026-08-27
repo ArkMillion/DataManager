@@ -2,15 +2,11 @@ name: Release
 
 on:
   push:
-    branches: [master]
-  workflow_dispatch:
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
-
-concurrency:
-  group: release-master
-  cancel-in-progress: false
 
 jobs:
   release:
@@ -30,33 +26,36 @@ jobs:
       - name: Build & Test
         run: mvn -B -ntp verify
 
-      - name: Resolve version
-        id: version
+      - name: Validate tag
+        id: tag
         run: |
-          VERSION=$(mvn -B -q org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate -Dexpression=project.version -DforceStdout)
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
-            echo "Failed to resolve valid project version, got: '$VERSION'"
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid release tag: '$TAG'. Expected pattern vX.Y.Z"
             exit 1
           fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Project version: $VERSION"
+          echo "Release tag: $TAG"
 
-      - name: Check if tag exists
-        id: check
+      - name: Check POM version matches tag
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Tag v${{ steps.version.outputs.version }} already exists, will replace release."
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+          POM_VERSION=$(mvn -B -q org.apache.maven.plugins:maven-help-plugin:3.4.0:evaluate -Dexpression=project.version -DforceStdout)
+          echo "POM version: $POM_VERSION, tag version: ${{ steps.tag.outputs.version }}"
+          if [[ "$POM_VERSION" != "${{ steps.tag.outputs.version }}" ]]; then
+            echo "POM version '$POM_VERSION' does not match tag 'v${{ steps.tag.outputs.version }}'. Update pom.xml, commit, then re-tag."
+            exit 1
           fi
 
-      - name: Delete existing release & tag
-        if: steps.check.outputs.exists == 'true'
+      - name: Ensure release is not already published
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete "v${{ steps.version.outputs.version }}" --yes --cleanup-tag
+          if gh release view "${{ steps.tag.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Release ${{ steps.tag.outputs.tag }} already exists. Published releases are immutable; push a new tag (e.g. v1.0.1)."
+            exit 1
+          fi
 
       - name: Collect artifacts
         run: |
@@ -73,8 +72,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            --target "$GITHUB_SHA" \
-            --title "v${{ steps.version.outputs.version }}" \
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            --title "v${{ steps.tag.outputs.version }}" \
             --generate-notes \
             staging/*.jar
