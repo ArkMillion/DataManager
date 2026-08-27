@@ -39,6 +39,23 @@ public class RedisCacheManager implements CacheManager {
     private static final String RELEASE_LOCK_LUA =
             "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 
+    /**
+     * Version CAS: writes KEYS[1] (payload) and KEYS[2] (version mirror) only when
+     * ARGV[1] is strictly newer than the stored version. A missing version key counts
+     * as -1, so first writers always win. Note redis.call GET maps a missing key to
+     * Lua false, hence the explicit guard before tonumber.
+     */
+    private static final String SET_IF_NEWER_LUA =
+            "local raw = redis.call('GET', KEYS[2]); " +
+            "local cur = -1; " +
+            "if raw then cur = tonumber(raw) or -1 end; " +
+            "if tonumber(ARGV[1]) > cur then " +
+            "  redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3]); " +
+            "  redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[3]); " +
+            "  return 1; " +
+            "end; " +
+            "return 0;";
+
     private final RedisConfig config;
     private final String uri;
     private final String resolvedPassword;
@@ -327,6 +344,15 @@ public class RedisCacheManager implements CacheManager {
         Object result = execute(j -> j.eval(RELEASE_LOCK_LUA,
                 Collections.singletonList(lockKey),
                 Collections.singletonList(requestId)));
+        return result instanceof Long && (Long) result == 1L;
+    }
+
+    @Override
+    public boolean setIfNewer(String key, String versionKey, long newVersion, String value, long ttlSeconds) {
+        Object result = execute(j -> j.eval(SET_IF_NEWER_LUA,
+                java.util.Arrays.asList(key, versionKey),
+                java.util.Arrays.asList(String.valueOf(newVersion), value,
+                        String.valueOf(Math.max(1, ttlSeconds)))));
         return result instanceof Long && (Long) result == 1L;
     }
 

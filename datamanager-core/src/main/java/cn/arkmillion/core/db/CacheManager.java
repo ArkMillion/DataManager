@@ -81,6 +81,20 @@ public interface CacheManager extends AutoCloseable {
 
     boolean releaseLock(String lockKey, String requestId);
 
+    /**
+     * Atomic version-guarded write backed by a single Lua script: {@code value}
+     * is stored into {@code key} with the given TTL only when {@code newVersion}
+     * is strictly greater than the version currently recorded under
+     * {@code versionKey}. The companion version key is written/refreshed inside
+     * the same script, so data and version can never diverge.
+     *
+     * @return {@code true} when the value was written,
+     *         {@code false} when an equal-or-newer version already exists.
+     */
+    default boolean setIfNewer(String key, String versionKey, long newVersion, String value, long ttlSeconds) {
+        throw new UnsupportedOperationException("setIfNewer is not supported by this CacheManager");
+    }
+
     Set<String> keys(String pattern);
 
     long dbSize();
